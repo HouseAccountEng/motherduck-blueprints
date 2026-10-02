@@ -1,24 +1,27 @@
 ## Highlights
 
-- Preview cleanup skips Dependabot branches before it starts, so those runs no longer check out code or validate the base manifest. [#94](https://github.com/motherduckdb/motherduck-blueprints/pull/94)
-- Safer template publishing: each release validates the generated template before publishing it, and a patch for an older release line no longer moves `@v0` or the template back. [#94](https://github.com/motherduckdb/motherduck-blueprints/pull/94)
+- The local Dive preview supports `useDiveState`, so Dives that keep filters, sort order, or selected views in shared state now preview locally. [#104](https://github.com/motherduckdb/motherduck-blueprints/pull/104)
+- Release commits pass the package version check even when the tag is pushed before CI reaches that step. [#96](https://github.com/motherduckdb/motherduck-blueprints/pull/96)
 
-## Upgrading from v0.7.0
+## Upgrading from v0.7.1
 
-v0.7.1 is a patch release with no manifest or configuration changes. Generated repositories pin an exact version in `Makefile` and in every workflow reference, so nothing changes until you upgrade. Workflows that reference the floating `@v0` tag receive v0.7.1 automatically.
+v0.7.2 is a patch release with no manifest or configuration changes. Generated repositories pin an exact version in `Makefile` and in every workflow reference, so nothing changes until you upgrade. Workflows that reference the floating `@v0` tag receive v0.7.2 automatically.
 
-1. Run `make upgrade VERSION=0.7.1`. It updates `CLI_VERSION` and every Blueprints workflow and action pin to `v0.7.1`.
-2. Run `make validate`.
-3. Open a pull request, review the diff, and merge it.
+1. Run `make upgrade VERSION=0.7.2`. It updates `CLI_VERSION` and every Blueprints workflow and action pin to `v0.7.2`.
+2. To use `useDiveState` in local previews, replace `.dive-preview/src/md-sdk.tsx` with the [v0.7.2 copy](https://github.com/motherduckdb/motherduck-blueprints/blob/v0.7.2/.dive-preview/src/md-sdk.tsx). `make upgrade` updates version pins only and does not change preview files. No new npm packages are needed.
+3. Run `make validate`, and `make preview-smoke <blueprint-name>` for any Dive.
+4. Open a pull request, review the diff, and merge it.
+
+## Features
+
+- Local Dive preview: `useDiveState(key, initialValue)` returns a `useState`-style value and setter. State is kept in a `diveState` URL parameter, so it survives reloads and copied preview links. Setting a key to `undefined` restores its initial value, and call sites with the same key share state. Like the Dive runtime, the preview rejects values that are not JSON-serializable and state over 64 KB. [#104](https://github.com/motherduckdb/motherduck-blueprints/pull/104)
 
 ## Bug Fixes
 
-- Dependabot preview cleanup: before, the skip ran inside the cleanup job after it had checked out the base commit and validated its manifest, so a problem in those steps still showed a failed cleanup for a branch that never had a preview. Now the job is skipped for Dependabot branches before it starts. [#94](https://github.com/motherduckdb/motherduck-blueprints/pull/94)
+- CI accepts the package version on the commit its release tag points to, so a release commit no longer fails the version check when the tag is pushed first. [#96](https://github.com/motherduckdb/motherduck-blueprints/pull/96)
 
-## Maintenance
+## Documentation
 
-- Releases run `md-blueprints validate` on the generated template before pushing it to the template repository. [#94](https://github.com/motherduckdb/motherduck-blueprints/pull/94)
-- A release for an older line keeps the template's default branch, the floating major tag, and the GitHub "Latest" release on the highest version. [#94](https://github.com/motherduckdb/motherduck-blueprints/pull/94)
-- The tooling repository's own preview cleanup works when a pull request's base commit predates the action's `python` output. [#94](https://github.com/motherduckdb/motherduck-blueprints/pull/94)
+- The setup guide explains how an unapproved production run holds later deploys, and the action guide explains how preview cleanup treats Dependabot branches. [#97](https://github.com/motherduckdb/motherduck-blueprints/pull/97)
 
-**Full diff:** https://github.com/motherduckdb/motherduck-blueprints/compare/v0.7.0...v0.7.1
+**Full diff:** https://github.com/motherduckdb/motherduck-blueprints/compare/v0.7.1...v0.7.2

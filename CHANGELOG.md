@@ -6,9 +6,13 @@ Update this file in every pull request. Add entries under `Unreleased` until the
 
 ## Unreleased
 
-- Add `useDiveState` to the local Dive preview. State lives in a `diveState` URL parameter, so it survives reloads and copied preview links. The preview rejects values that are not JSON-serializable and bags over 64 KB.
-- Document release steps, the version bump after each release, and the tooling repository's GitHub settings in `MAINTAINING.md`. Explain in the setup guide how an unapproved production run holds later deploys, and in the action guide how preview cleanup treats Dependabot branches.
-- CI accepts the package version on the commit its release tag points to, so a release commit no longer fails when the tag is pushed before CI reaches the version check. Bump the package and action pins to 0.7.2.
+## v0.7.2 - 2026-10-02
+
+Patch release. Existing repositories pin exact versions and need `make upgrade VERSION=0.7.2`. Workflows on the floating `@v0` tag receive it automatically. To use `useDiveState` in local previews, also copy `.dive-preview/src/md-sdk.tsx` from this release, because upgrades do not change preview files. See the [v0.7.2 release notes](https://github.com/motherduckdb/motherduck-blueprints/releases/tag/v0.7.2).
+
+- Add `useDiveState` to the local Dive preview. State lives in a `diveState` URL parameter, so it survives reloads and copied preview links. The preview rejects values that are not JSON-serializable and bags over 64 KB. (#104)
+- Document release steps, the version bump after each release, and the tooling repository's GitHub settings in `MAINTAINING.md`. Explain in the setup guide how an unapproved production run holds later deploys, and in the action guide how preview cleanup treats Dependabot branches. (#97)
+- CI accepts the package version on the commit its release tag points to, so a release commit no longer fails when the tag is pushed before CI reaches the version check. Bump the package and action pins to 0.7.2. (#96)
 
 ## v0.7.1 - 2026-09-28
 
