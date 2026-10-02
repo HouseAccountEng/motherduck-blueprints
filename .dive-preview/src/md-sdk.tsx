@@ -1,7 +1,7 @@
 /**
  * Simplified @motherduck/react-sql-query shim for local Vite preview.
- * Same API as the production dive runtime — useSQLQuery, useConnection,
- * useConnectionStatus, and MotherDuckSDKProvider.
+ * Same API as the production dive runtime — useSQLQuery, useDiveState,
+ * useConnection, useConnectionStatus, and MotherDuckSDKProvider.
  */
 import { MDConnection } from "@motherduck/wasm-client";
 import type { DuckDBRow } from "@motherduck/wasm-client";
@@ -267,6 +267,129 @@ export function useSQLQuery<TData = readonly DuckDBRow[]>(
     error: snap.error ?? null,
     refetch, status: snap.status,
   };
+}
+
+// ── useDiveState ───────────────────────────────────────────────────
+
+// Production stores the state bag with the shared Dive link. The preview keeps
+// it in a URL search parameter so it survives reloads and copied local links.
+const DIVE_STATE_PARAM = "diveState";
+const DIVE_STATE_MAX_BYTES = 64 * 1024;
+
+type DiveStateBag = Record<string, unknown>;
+
+function readDiveStateBag(): DiveStateBag {
+  const raw = new URLSearchParams(window.location.search).get(DIVE_STATE_PARAM);
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as DiveStateBag;
+    }
+  } catch {
+    // Fall through: an unreadable bag opens with per-call-site defaults.
+  }
+  console.warn("Ignoring unreadable Dive state in the URL");
+  return {};
+}
+
+let diveStateBag: DiveStateBag = readDiveStateBag();
+const diveStateListeners = new Set<() => void>();
+
+function notifyDiveState() {
+  diveStateListeners.forEach((l) => l());
+}
+
+function subscribeDiveState(listener: () => void) {
+  diveStateListeners.add(listener);
+  return () => { diveStateListeners.delete(listener); };
+}
+
+window.addEventListener("popstate", () => {
+  diveStateBag = readDiveStateBag();
+  notifyDiveState();
+});
+
+function assertJsonValue(value: unknown, path: string): void {
+  if (value === null) return;
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return;
+    case "number":
+      if (Number.isFinite(value)) return;
+      throw new Error(`useDiveState value at ${path} must be a finite number`);
+    case "object": {
+      if (Array.isArray(value)) {
+        value.forEach((item, i) => assertJsonValue(item, `${path}[${i}]`));
+        return;
+      }
+      const proto = Object.getPrototypeOf(value);
+      if (proto !== Object.prototype && proto !== null) {
+        throw new Error(
+          `useDiveState value at ${path} must be a plain object, array, or primitive`,
+        );
+      }
+      for (const [k, v] of Object.entries(value)) assertJsonValue(v, `${path}.${k}`);
+      return;
+    }
+    default:
+      throw new Error(`useDiveState value at ${path} is not JSON-serializable`);
+  }
+}
+
+function writeDiveStateBag(next: DiveStateBag) {
+  const params = new URLSearchParams(window.location.search);
+  if (Object.keys(next).length === 0) {
+    params.delete(DIVE_STATE_PARAM);
+  } else {
+    const encoded = JSON.stringify(next);
+    if (new TextEncoder().encode(encoded).length > DIVE_STATE_MAX_BYTES) {
+      throw new Error("Dive state exceeds the 64 KB limit");
+    }
+    params.set(DIVE_STATE_PARAM, encoded);
+  }
+  const search = params.toString();
+  const url = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+  window.history.replaceState(window.history.state, "", url);
+  diveStateBag = next;
+  notifyDiveState();
+}
+
+export function useDiveState<T>(
+  key: string,
+  initialValue: T,
+): [T, (value: T | undefined | ((prev: T) => T | undefined)) => void] {
+  const stored = useSyncExternalStore(
+    subscribeDiveState,
+    () => diveStateBag[key],
+    () => undefined,
+  );
+  const value = stored === undefined ? initialValue : (stored as T);
+
+  const initialRef = useRef(initialValue);
+  initialRef.current = initialValue;
+
+  const setValue = useCallback(
+    (update: T | undefined | ((prev: T) => T | undefined)) => {
+      const current = diveStateBag[key];
+      const prev = current === undefined ? initialRef.current : (current as T);
+      const next = typeof update === "function"
+        ? (update as (p: T) => T | undefined)(prev)
+        : update;
+      if (next === undefined) {
+        if (!(key in diveStateBag)) return;
+        const { [key]: _removed, ...rest } = diveStateBag;
+        writeDiveStateBag(rest);
+        return;
+      }
+      assertJsonValue(next, key);
+      writeDiveStateBag({ ...diveStateBag, [key]: next });
+    },
+    [key],
+  );
+
+  return [value, setValue];
 }
 
 // ── useConnection / useConnectionStatus ────────────────────────────
