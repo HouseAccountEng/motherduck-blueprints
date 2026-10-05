@@ -336,6 +336,17 @@ jobs:
           branch: ${{ steps.preview-branch.outputs.branch }}
           blueprints: ${{ needs.compute_changes.outputs.changed_csv }}
 
+      - name: Summarize preview plan
+        shell: bash
+        env:
+          PLAN_OUTPUT: ${{ steps.plan-preview.outputs.stdout }}
+        run: |
+          {
+            echo "### Preview Blueprint Plan"
+            echo
+            printf "%s\n" "$PLAN_OUTPUT"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Deploy preview blueprints
         id: deploy-preview
         uses: ./
@@ -353,19 +364,25 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          PLAN_OUTPUT: ${{ steps.plan-preview.outputs.stdout }}
           DEPLOY_OUTPUT: ${{ steps.deploy-preview.outputs.stdout }}
         with:
           script: |
             const marker = '<!-- preview-blueprints-comment -->';
-            const header = `${marker}\n### Preview Blueprints\n\n`;
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const header = `${marker}\n### Preview Blueprints\n\nFull plan and deployment log: [workflow run](${runUrl})\n\n`;
+            const closer = '\n\n</details>';
             const notice = `\n\n_Output truncated. See the [workflow run](${runUrl}) for the full plan and deployment log._`;
             // GitHub rejects comment bodies over 65536 characters.
-            const limit = 65000 - header.length - notice.length;
-            let output = `${process.env.PLAN_OUTPUT ?? ''}\n\n${process.env.DEPLOY_OUTPUT ?? ''}`;
+            const limit = 65000 - header.length - closer.length - notice.length;
+            // The deploy report leads with the selection and preview links and folds the resource table.
+            let output = (process.env.DEPLOY_OUTPUT ?? '').trim();
             if (output.length > limit) {
-              output = output.slice(0, limit) + notice;
+              output = output.slice(0, limit);
+              // Close a cut-off <details> block so the notice stays visible.
+              if (output.lastIndexOf('<details>') > output.lastIndexOf('</details>')) {
+                output += closer;
+              }
+              output += notice;
             }
             const body = header + output;
             let existing;

@@ -1016,6 +1016,26 @@ def test_plan_formatter_escapes_markdown_cells() -> None:
     assert "name with newline" in output
 
 
+
+def test_plan_formatter_separates_selected_and_added_packages() -> None:
+    from md_blueprints.deploy import PlanFormatter
+
+    records = [
+        PlanRecord(name, "dive", "dashboard", name, "create", False, None)
+        for name in ("ingest", "listings", "ingest")
+    ]
+
+    output = PlanFormatter.format(records, title="Plan", requested=["listings"])
+    assert output.splitlines()[:3] == [
+        "#### Plan",
+        "",
+        "**Selected:** `listings` · **Added by the dependency graph:** `ingest`",
+    ]
+    assert PlanFormatter.selection(["ingest", "listings"], ["ingest", "listings"]) == (
+        "**Selected:** `ingest`, `listings`"
+    )
+    assert "Selected" not in PlanFormatter.format(records, title="Plan")
+
 @pytest.mark.parametrize('status', ['SUCCEEDED', 'RUN_STATUS_SUCCEEDED'])
 def test_wait_tracks_the_submitted_run_not_the_latest(monkeypatch: pytest.MonkeyPatch, status: str) -> None:
     deployer = Deployer(Project(FIXTURES / 'complex'))

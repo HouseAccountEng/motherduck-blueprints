@@ -65,7 +65,9 @@ Preview deployments are branch-scoped. Preview share/database names that may be 
 
 Preview Flight schedules are disabled by target policy. Use `runOnDeploy: true` when a preview or production deploy should start an immediate run. Use `waitForRun: success` when dependent Dives should wait for the Flight run to succeed before resolving shares.
 
-Preview selection expands through both upstream producers and downstream consumers. Production selection expands downstream only, so changing a consumer does not rerun an unchanged producer.
+Preview selection adds the downstream consumers of changed packages, then the upstream producers those packages read. Other consumers of those producers stay out of the preview. Production selection expands downstream only, so changing a consumer does not rerun an unchanged producer.
+
+The preview PR comment comes from `deploy --target preview` stdout. It lists the selected and graph-added packages, then preview links, with the verification table folded. The plan goes to the run summary.
 
 ## Commands
 

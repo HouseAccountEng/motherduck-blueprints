@@ -6,6 +6,10 @@ Update this file in every pull request. Add entries under `Unreleased` until the
 
 ## Unreleased
 
+- Preview only the packages a pull request affects. Previews used to deploy every package connected to a change, so editing one Dive redeployed every Dive that read the same producer. A preview now deploys the changed packages, their downstream consumers, and the producers those packages read. Production and staging selection is unchanged. Preview cleanup still removes every branch resource.
+- Shorten the preview pull request comment. It now starts with the selected packages and any packages the dependency graph added, then lists preview links, and folds the verified resource table into a collapsed section. The plan table moved from the comment to the workflow run summary. `plan` and `verify` output also name the selected and added packages.
+- Bump the package and action pins to 0.7.3.
+
 ## v0.7.2 - 2026-10-02
 
 Patch release. Existing repositories pin exact versions and need `make upgrade VERSION=0.7.2`. Workflows on the floating `@v0` tag receive it automatically. To use `useDiveState` in local previews, also copy `.dive-preview/src/md-sdk.tsx` from this release, because upgrades do not change preview files. See the [v0.7.2 release notes](https://github.com/motherduckdb/motherduck-blueprints/releases/tag/v0.7.2).

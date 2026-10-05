@@ -272,18 +272,24 @@ class Project:
         if not names:
             return list(self._topological_names)
 
-        expanded = set(selected)
-        queue = deque(sorted(selected))
-        while queue:
-            name = queue.popleft()
-            related = set(self.consumers[name])
-            if target == "preview":
-                related.update(self.dependencies[name])
-            for candidate in sorted(related):
-                if candidate not in expanded:
-                    expanded.add(candidate)
-                    queue.append(candidate)
+        # Every target redeploys the consumers of a changed package.
+        expanded = self._graph_closure(selected, self.consumers)
+        if target == "preview":
+            # A branch preview starts empty, so it also needs the producers those packages read.
+            # Other consumers of those producers are unchanged and stay out of the preview.
+            expanded = self._graph_closure(expanded, self.dependencies)
         return [name for name in self._topological_names if name in expanded]
+
+    @staticmethod
+    def _graph_closure(start: set[str], edges: dict[str, set[str]]) -> set[str]:
+        reached = set(start)
+        queue = deque(sorted(start))
+        while queue:
+            for candidate in sorted(edges[queue.popleft()]):
+                if candidate not in reached:
+                    reached.add(candidate)
+                    queue.append(candidate)
+        return reached
 
     def changed_blueprints(self, *, base: str | None, head: str | None) -> list[str]:
         all_names = self.all_blueprint_names()
