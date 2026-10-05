@@ -444,7 +444,7 @@ def _plan(options: argparse.Namespace) -> None:
     print(
         json.dumps([record.to_dict() for record in records], indent=2)
         if options.json
-        else PlanFormatter.format(records, title="Deployment Plan")
+        else PlanFormatter.format(records, title="Deployment Plan", requested=names)
     )
     deployer.ensure_plan_succeeds(records)
 
@@ -461,7 +461,7 @@ def _verify(options: argparse.Namespace) -> None:
     records = Deployer(project).verify(target=options.target or "prod", branch=options.branch, names=names)
     print(
         json.dumps([record.to_dict() for record in records], indent=2)
-        if options.json else PlanFormatter.format(records, title="Live Verification")
+        if options.json else PlanFormatter.format(records, title="Live Verification", requested=names)
     )
 
 

@@ -103,6 +103,81 @@ def test_target_selection_expands_dependency_graph(tmp_path: Path) -> None:
     assert project.deployment_blueprint_names("prod", ["consumer"]) == ["consumer"]
 
 
+def write_fan_out_project(root: Path) -> Project:
+    """ingest and lookup feed sibling consumers; enriched reads both and feeds report."""
+    (root / "motherduck.yml").write_text(
+        """schemaVersion: 1
+repository:
+  name: fan-out
+include:
+  - projects/**/blueprint.yml
+targets:
+  preview:
+    mode: preview
+    policies:
+      cleanup: true
+      disableSchedules: true
+      requireBranchSlugInDataResources: true
+  prod:
+    mode: production
+variables:
+  preview_suffix:
+    default: _preview_${target.branch_slug}
+""",
+        encoding="utf-8",
+    )
+    packages: dict[str, tuple[list[str], bool]] = {
+        "ingest": ([], True),
+        "lookup": ([], True),
+        "listings": (["ingest"], False),
+        "fraud": (["ingest"], False),
+        "enriched": (["ingest", "lookup"], True),
+        "report": (["enriched"], False),
+        "audit": (["lookup"], False),
+    }
+    for name, (inputs, produces) in packages.items():
+        lines = ["schemaVersion: 1", f"name: {name}", f"title: {name.title()}"]
+        if inputs:
+            lines.append("inputs:")
+            for producer in inputs:
+                lines += [f"  {producer}:", f"    blueprint: {producer}", "    output: data"]
+        if produces:
+            lines += [
+                "outputs:", "  data:", "    share: data",
+                "resources:", "  shares:", "    data:",
+                f"      name: {name}", f"      database: {name}",
+                "      targets:", "        preview:",
+                f"          name: {name}${{var.preview_suffix}}",
+                f"          database: {name}${{var.preview_suffix}}",
+            ]
+        else:
+            lines.append("resources: {}")
+        package = root / "projects" / name
+        package.mkdir(parents=True)
+        (package / "blueprint.yml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return Project(root)
+
+
+@pytest.mark.parametrize("target, changed, expected", [
+    # A changed consumer previews with its producer, not with the producer's other consumers.
+    ("preview", ["listings"], ["ingest", "listings"]),
+    # A changed producer previews every consumer, plus the other producers those consumers read.
+    ("preview", ["ingest"], ["ingest", "fraud", "listings", "lookup", "enriched", "report"]),
+    ("preview", ["enriched"], ["ingest", "lookup", "enriched", "report"]),
+    ("preview", ["listings", "audit"], ["ingest", "listings", "lookup", "audit"]),
+    # Stable targets expand downstream only.
+    ("prod", ["listings"], ["listings"]),
+    ("prod", ["ingest"], ["ingest", "fraud", "listings", "enriched", "report"]),
+])
+def test_preview_selection_skips_unchanged_sibling_consumers(
+    tmp_path: Path, target: str, changed: list[str], expected: list[str],
+) -> None:
+    project = write_fan_out_project(tmp_path)
+    project.validate(targets=[target], branch="feature/one-dive")
+
+    assert project.deployment_blueprint_names(target, changed) == expected
+
+
 def test_input_metadata_uses_target_rendered_producer_output(tmp_path: Path) -> None:
     project = write_graph_project(tmp_path)
 

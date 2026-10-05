@@ -246,7 +246,7 @@ Every resource accepts a `targets.<target>` override. All declared targets valid
 
 Inputs and repository-local Guide references form a DAG:
 
-- Preview selection expands recursively upstream and downstream.
+- Preview selection expands recursively downstream, then adds the producers those packages read. Unchanged consumers of those producers are not previewed.
 - Stable staging and production selection expand recursively downstream only.
 - Producers deploy before consumers.
 - A consumer-only production plan requires the producer's output to exist in MotherDuck and fails before mutation otherwise.

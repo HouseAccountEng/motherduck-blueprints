@@ -213,13 +213,26 @@ class PlanRecord:
 
 class PlanFormatter:
     @staticmethod
-    def format(records: list[PlanRecord], *, title: str) -> str:
+    def format(records: list[PlanRecord], *, title: str, requested: list[str] | None = None) -> str:
         if not records:
             return f"#### {title}\n\nNo resources selected."
+        selection = PlanFormatter.selection(requested, [record.blueprint for record in records])
+        return "\n\n".join(part for part in (f"#### {title}", selection, PlanFormatter.table(records)) if part)
 
+    @staticmethod
+    def selection(requested: list[str] | None, deployed: list[str]) -> str:
+        """Separate the packages a run asked for from those the dependency graph added."""
+        if not requested:
+            return ""
+        added = list(dict.fromkeys(name for name in deployed if name not in requested))
+        line = f"**Selected:** {PlanFormatter._names(requested)}"
+        if added:
+            line += f" · **Added by the dependency graph:** {PlanFormatter._names(added)}"
+        return line
+
+    @staticmethod
+    def table(records: list[PlanRecord]) -> str:
         lines = [
-            f"#### {title}",
-            "",
             "| Blueprint | Type | Key | Name | Action | Exists | ID | Status | Notes |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
@@ -237,6 +250,14 @@ class PlanFormatter:
             ]
             lines.append("| " + " | ".join(PlanFormatter._escape_cell(value) for value in row) + " |")
         return "\n".join(lines)
+
+    @staticmethod
+    def _count(count: int, noun: str) -> str:
+        return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+    @staticmethod
+    def _names(names: list[str]) -> str:
+        return ", ".join(f"`{name}`" for name in names)
 
     @staticmethod
     def _format_exists(value: bool | None) -> str:
@@ -271,16 +292,36 @@ class Deployer:
         self._prepare_live_command(target, "verify")
         self._preflight_rbac(rendered)
         records = self._verify_rendered(rendered)
-        self._verification_summary(records)
+        self._verification_summary(records, names)
         return records
 
     @staticmethod
-    def _verification_summary(records: list[PlanRecord]) -> str:
-        summary = PlanFormatter.format(records, title="Deployment Verification")
+    def _verification_summary(records: list[PlanRecord], requested: list[str] | None = None) -> str:
+        summary = PlanFormatter.format(records, title="Deployment Verification", requested=requested)
         if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
             with Path(summary_path).open("a", encoding="utf-8") as handle:
                 handle.write(summary + "\n")
         return summary
+
+    @staticmethod
+    def _preview_report(
+        requested: list[str] | None,
+        rendered: list[RenderedBlueprint],
+        sections: list[str],
+        verified: list[PlanRecord] | None,
+    ) -> str:
+        """Lead with what changed and the preview links; fold the full resource table away."""
+        parts = [PlanFormatter.selection(requested, [blueprint.name for blueprint in rendered]), *sections]
+        if verified:
+            resources = PlanFormatter._count(len(verified), "resource")
+            blueprints = PlanFormatter._count(len({record.blueprint for record in verified}), "blueprint")
+            parts.append(
+                "<details>\n"
+                f"<summary>Verified {resources} across {blueprints}</summary>\n\n"
+                f"{PlanFormatter.table(verified)}\n\n"
+                "</details>"
+            )
+        return "\n\n".join(part for part in parts if part)
 
     def _verify_rendered(
         self, rendered: list[RenderedBlueprint], expected: list[PlanRecord] | None = None,
@@ -326,14 +367,30 @@ class Deployer:
         for blueprint, key, role in self._role_deployment_order(rendered):
             self._deploy_role(role, plan_index[(blueprint.name, "role", key)])
 
-        for blueprint in rendered:
-            self._deploy_blueprint(blueprint, target, plan_index)
-        if verify:
-            try:
-                verified = self._verify_rendered(rendered, records)
-            except (ValidationError, CommandError) as exc:
-                raise CommandError(f"Deployment applied, but verification failed: {exc}. No rollback was attempted.") from exc
-            print(self._verification_summary(verified))
+        sections: list[str] = []
+        verified: list[PlanRecord] | None = None
+        try:
+            for blueprint in rendered:
+                if section := self._deploy_blueprint(blueprint, target, plan_index):
+                    sections.append(section)
+            if verify:
+                try:
+                    verified = self._verify_rendered(rendered, records)
+                except (ValidationError, CommandError) as exc:
+                    raise CommandError(
+                        f"Deployment applied, but verification failed: {exc}. No rollback was attempted."
+                    ) from exc
+        except BaseException:
+            # Keep links to the packages that did deploy in the log.
+            if sections:
+                print("\n\n".join(sections))
+            raise
+        if verified is not None:
+            summary = self._verification_summary(verified, names)
+            if target != "preview":
+                print(summary)
+        if target == "preview":
+            print(self._preview_report(names, rendered, sections, verified))
 
     def cleanup_plan(self, *, target: str, branch: str | None, names: list[str] | None) -> list[PlanRecord]:
         if target != "preview":
@@ -1169,7 +1226,8 @@ class Deployer:
         blueprint: RenderedBlueprint,
         target: str,
         plan_index: dict[tuple[str, str, str], PlanRecord],
-    ) -> None:
+    ) -> str | None:
+        """Deploy one package and return its preview links as Markdown."""
         print(f"Deploying blueprint '{blueprint.name}' to {target}...", file=sys.stderr)
         flight_rows: list[str] = []
         share_rows: list[str] = []
@@ -1219,25 +1277,22 @@ class Deployer:
                 guide_rows.append(row)
 
         if target != "preview":
-            return
+            return None
 
-        print(f"#### {blueprint.title}")
-        print()
-        self._print_section("Flights", "| Flight | ID | Run started |", "|--------|----|-------------|", flight_rows)
-        self._print_section("Shares", "| Share | Link |", "|-------|------|", share_rows)
-        self._print_section("Dives", "| Dive | Status | Link |", "|------|--------|------|", dive_rows)
-        self._print_section("Guides", "| Guide | ID |", "|-------|----|", guide_rows)
+        sections = [
+            self._format_section("Flights", "| Flight | ID | Run started |", "|--------|----|-------------|", flight_rows),
+            self._format_section("Shares", "| Share | Link |", "|-------|------|", share_rows),
+            self._format_section("Dives", "| Dive | Status | Link |", "|------|--------|------|", dive_rows),
+            self._format_section("Guides", "| Guide | ID |", "|-------|----|", guide_rows),
+        ]
+        body = [section for section in sections if section]
+        return "\n\n".join([f"#### {blueprint.title}", *body]) if body else None
 
-    def _print_section(self, title: str, header: str, separator: str, rows: list[str]) -> None:
+    @staticmethod
+    def _format_section(title: str, header: str, separator: str, rows: list[str]) -> str:
         if not rows:
-            return
-        print(f"##### {title}")
-        print()
-        print(header)
-        print(separator)
-        for row in rows:
-            print(row)
-        print()
+            return ""
+        return "\n".join([f"##### {title}", "", header, separator, *rows])
 
     def _deploy_flight(self, flight: dict[str, object], target: str, plan: PlanRecord) -> str | None:
         name = str(flight["name"])

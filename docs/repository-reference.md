@@ -96,7 +96,7 @@ The CLI validates missing producers, missing outputs, outputs pointing to missin
 
 Selection follows the graph:
 
-- Preview expands recursively upstream and downstream, producing a branch-scoped connected preview.
+- Preview expands recursively downstream, then adds every producer those packages read so the branch-scoped preview has its data. Other consumers of those producers are unchanged and are not previewed. Changing one Dive previews that Dive and its producers, not every Dive that reads the same share.
 - Production expands downstream only. Changing a producer redeploys its consumers; changing only a consumer uses the existing production output and does not rerun its producer.
 - Deployment order is deterministic and producer-first.
 - Preview cleanup reverses dependency order and removes deployed Guides before Dives, Flights, shares, and databases.
@@ -191,7 +191,7 @@ Declare custom roles under `resources.roles` or scaffold a role package with `ma
 
 ## CI/CD
 
-Pull requests compute directly changed packages, expand the preview dependency graph, plan live changes, deploy branch-scoped resources, and comment with plans and preview links. Without staging, pushes to `main` expand changes downstream and deploy production. With staging, pushes to `main` deploy staging and a published non-prerelease GitHub Release verifies and deploys the exact tagged commit to production. Closing a PR or deleting a branch triggers dependency-safe preview cleanup through the preview target's GitHub Environment.
+Pull requests compute directly changed packages, expand the preview dependency graph, plan live changes, deploy branch-scoped resources, and comment with the selected packages, any packages the dependency graph added, and preview links. The verified resource table is folded in the comment, and the full plan is in the workflow run summary. Without staging, pushes to `main` expand changes downstream and deploy production. With staging, pushes to `main` deploy staging and a published non-prerelease GitHub Release verifies and deploys the exact tagged commit to production. Closing a PR or deleting a branch triggers dependency-safe preview cleanup through the preview target's GitHub Environment.
 
 ## Included examples
 

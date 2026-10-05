@@ -34,6 +34,7 @@ The GitHub workflows are short callers into versioned Blueprints workflows. Keep
 - Preview resource names must be branch-scoped. Flight schedules are disabled in preview, but source/config may still point at production data. Audit those references before enabling immediate runs.
 - Do not use a production Guide ID in preview. Put an adopted ID under `targets.prod` only.
 - New Guides are validation-only until `deploy: true`. Roles never deploy in preview. Organization Guides and role administration require an admin identity.
+- Preview selection deploys the changed packages, their downstream consumers, and the producers those packages read. Other consumers of those producers are not previewed.
 - Production selection expands downstream, not upstream. Deploy missing producers first or include them explicitly.
 - `plan` checks live identity and dependencies; it is not a complete source/config diff and does not promise a no-op deployment.
 - Deleting a manifest does not delete its production resource. Preview cleanup is a separate destructive operation.

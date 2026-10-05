@@ -115,3 +115,71 @@ def test_created_flight_id_is_captured_and_compared(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(deployer, "_build_deploy_plan", lambda values: [record(resource_id="different-id")])
     with pytest.raises(ValidationError, match="changed identity"):
         deployer._verify_rendered([], [created])
+
+
+def preview_deployment(
+    monkeypatch: pytest.MonkeyPatch, sections: dict[str, str | None],
+) -> Deployer:
+    deployer = Deployer(Project(FIXTURE))
+    rendered = [RenderedBlueprint(name, name.title(), "", {}, {}, {}, {}) for name in sections]
+    records = [PlanRecord(name, "flight", "loader", name, "update", True, f"{name}-id") for name in sections]
+    monkeypatch.setattr(deployer, "_validate_and_render", lambda *args: rendered)
+    monkeypatch.setattr(deployer, "_prepare_live_command", lambda *args: None)
+    monkeypatch.setattr(deployer, "_preflight_rbac", lambda *args: None)
+    monkeypatch.setattr(deployer, "_build_deploy_plan", lambda *args: list(records))
+
+    def deploy_blueprint(blueprint: RenderedBlueprint, *args: object) -> str | None:
+        section = sections[blueprint.name]
+        if section == "fail":
+            raise CommandError("flight failed")
+        return section
+
+    monkeypatch.setattr(deployer, "_deploy_blueprint", deploy_blueprint)
+    return deployer
+
+
+def test_preview_report_leads_with_selection_and_links_and_folds_resources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    deployer = preview_deployment(monkeypatch, {
+        "ingest": "#### Ingest\n\n##### Shares",
+        "listings": "#### Listings\n\n##### Dives",
+    })
+
+    deployer.deploy(target="preview", branch="feature/one-dive", names=["listings"])
+
+    output = capsys.readouterr().out
+    assert output.startswith("**Selected:** `listings` · **Added by the dependency graph:** `ingest`\n")
+    assert output.index("#### Ingest") < output.index("#### Listings") < output.index("<details>")
+    folded = output[output.index("<details>"):]
+    assert "<summary>Verified 2 resources across 2 blueprints</summary>" in folded
+    assert "| ingest | flight | loader |" in folded and folded.rstrip().endswith("</details>")
+    assert "Deployment Verification" not in output
+    # The run summary keeps the unfolded table.
+    assert "#### Deployment Verification" in summary.read_text()
+    assert "<details>" not in summary.read_text()
+
+
+def test_preview_failure_keeps_links_for_deployed_packages(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    deployer = preview_deployment(monkeypatch, {"ingest": "#### Ingest", "listings": "fail"})
+
+    with pytest.raises(CommandError, match="flight failed"):
+        deployer.deploy(target="preview", branch="feature/one-dive", names=["listings"])
+
+    assert capsys.readouterr().out.strip() == "#### Ingest"
+
+
+def test_stable_deploy_prints_the_verification_table(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    deployer = preview_deployment(monkeypatch, {"ingest": None, "listings": None})
+
+    deployer.deploy(target="prod", branch=None, names=["ingest"])
+
+    output = capsys.readouterr().out
+    assert output.startswith("#### Deployment Verification\n\n**Selected:** `ingest` · ")
+    assert "<details>" not in output

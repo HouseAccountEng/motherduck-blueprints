@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import contextlib
+import json
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -359,3 +361,45 @@ def test_customer_template_only_watches_customer_paths(tmp_path: Path) -> None:
         if line.startswith("# /"):
             owned = line[2:].split()[0].strip("/")
             assert (tmp_path / owned).exists() or owned in {"guides", "roles", "projects", "blueprints"}, owned
+
+
+def preview_comment_step() -> dict[str, Any]:
+    steps = reusable("deploy_blueprints")["jobs"]["deploy-preview"]["steps"]
+    return next(step for step in steps if step.get("name") == "Comment on pull request")
+
+
+def test_preview_comment_uses_the_deploy_report_and_moves_the_plan_to_the_run_summary() -> None:
+    steps = reusable("deploy_blueprints")["jobs"]["deploy-preview"]["steps"]
+    names = [step.get("name") for step in steps]
+    assert names.index("Summarize preview plan") < names.index("Deploy preview blueprints")
+    assert "GITHUB_STEP_SUMMARY" in steps[names.index("Summarize preview plan")]["run"]
+    assert set(preview_comment_step()["env"]) == {"DEPLOY_OUTPUT"}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+@pytest.mark.parametrize("report, closes_details", [
+    ("**Selected:** `listings`\n\n#### Listings\n\n<details>\n<summary>Verified</summary>\n\n" + "| row |\n" * 20000, True),
+    ("#### Listings\n\n" + "| link |\n" * 20000, False),
+])
+def test_preview_comment_truncation_keeps_the_notice_outside_details(report: str, closes_details: bool) -> None:
+    script = preview_comment_step()["with"]["script"]
+    body_script = script[: script.index("let existing;")]
+    # Pass the report on stdin: Linux caps a single environment string at 128 KiB.
+    harness = (
+        "process.env.DEPLOY_OUTPUT = require('fs').readFileSync(0, 'utf8');\n"
+        "const context = {serverUrl: 'https://github.com', repo: {owner: 'o', repo: 'r'}, runId: 1};\n"
+        + body_script
+        + "\nprocess.stdout.write(JSON.stringify(body));\n"
+    )
+    node = shutil.which("node")
+    assert node is not None
+    result = subprocess.run(
+        [node, "-e", harness], input=report, env={},
+        capture_output=True, text=True, check=True,
+    )
+    body = json.loads(result.stdout)
+
+    assert len(body) <= 65000
+    assert body.startswith("<!-- preview-blueprints-comment -->\n### Preview Blueprints\n")
+    assert body.endswith("for the full plan and deployment log._")
+    assert ("</details>\n\n_Output truncated." in body) is closes_details
