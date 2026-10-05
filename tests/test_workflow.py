@@ -384,7 +384,9 @@ def test_preview_comment_uses_the_deploy_report_and_moves_the_plan_to_the_run_su
 def test_preview_comment_truncation_keeps_the_notice_outside_details(report: str, closes_details: bool) -> None:
     script = preview_comment_step()["with"]["script"]
     body_script = script[: script.index("let existing;")]
+    # Pass the report on stdin: Linux caps a single environment string at 128 KiB.
     harness = (
+        "process.env.DEPLOY_OUTPUT = require('fs').readFileSync(0, 'utf8');\n"
         "const context = {serverUrl: 'https://github.com', repo: {owner: 'o', repo: 'r'}, runId: 1};\n"
         + body_script
         + "\nprocess.stdout.write(JSON.stringify(body));\n"
@@ -392,7 +394,7 @@ def test_preview_comment_truncation_keeps_the_notice_outside_details(report: str
     node = shutil.which("node")
     assert node is not None
     result = subprocess.run(
-        [node, "-e", harness], env={"DEPLOY_OUTPUT": report},
+        [node, "-e", harness], input=report, env={},
         capture_output=True, text=True, check=True,
     )
     body = json.loads(result.stdout)
