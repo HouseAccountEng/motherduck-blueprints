@@ -6,11 +6,15 @@ Update this file in every pull request. Add entries under `Unreleased` until the
 
 ## Unreleased
 
-- Set a Flight's instance size with `instanceType` (`F4`, `F16`, or `F32`). Omitting it keeps the live size, or the plan default for a new Flight. Imports record the size when the export includes it. `plan` and `deploy` stop before any write when the SQL backend's DuckDB is older than 1.5.6.
-- Raise the DuckDB client used by the action and the Python backend to 1.5.6, which MotherDuck now supports and which is needed to send a Flight instance size.
-- Stop the local Dive preview from sending cross-origin isolation headers. Production Dives no longer run cross-origin isolated, so a Dive that relies on `SharedArrayBuffer` now fails in the preview as it does in production.
-- Document that `motherduck dive watch` shows a blank preview in CLI `v1.5.5` builds and point to `make preview` instead.
-- Bump the package and action pins to 0.7.4.
+## v0.7.4 - 2026-10-05
+
+Patch release. Existing repositories pin exact versions and need `make upgrade VERSION=0.7.4`. Workflows on the floating `@v0` tag receive it automatically. Also copy `.dive-preview/vite.config.ts` from this release, because upgrades do not change preview files. See the [v0.7.4 release notes](https://github.com/motherduckdb/motherduck-blueprints/releases/tag/v0.7.4).
+
+- Set a Flight's instance size with `instanceType` (`F4`, `F16`, or `F32`). Omitting it keeps the live size, or the plan default for a new Flight. Imports record the size when the export includes it. `plan` and `deploy` stop before any write when the SQL backend's DuckDB is older than 1.5.6. (#109)
+- Raise the DuckDB client used by the action and the Python backend to 1.5.6, which MotherDuck now supports and which is needed to send a Flight instance size. (#109)
+- Stop the local Dive preview from sending cross-origin isolation headers. Production Dives no longer run cross-origin isolated, so a Dive that relies on `SharedArrayBuffer` now fails in the preview as it does in production. (#109)
+- Document that `motherduck dive watch` shows a blank preview in CLI `v1.5.5` builds and point to `make preview` instead. (#109)
+- Bump the package and action pins to 0.7.4. (#109)
 
 ## v0.7.3 - 2026-10-05
 
