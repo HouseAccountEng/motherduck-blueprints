@@ -23,6 +23,7 @@ from .schema import ValidationError
 KINDS = {"flight": "flights", "dive": "dives", "guide": "guides"}
 PAGE_SIZE = 100
 IMPORT_VERSION = "0.4.3"
+FLIGHT_INSTANCE_TYPES = ("F4", "F16", "F32")
 
 
 def checked_uuid(value: object) -> str:
@@ -209,6 +210,15 @@ def convert(snapshot: dict[str, Any], target: str) -> tuple[str, dict[str, str],
                 raise ValidationError("Flight config/secrets have an unsupported shape")
         if resource["maxRuntimeSec"] is None:
             del resource["maxRuntimeSec"]
+        # Clients before DuckDB 1.5.6 do not return the column; the plan default then applies.
+        instance_type = content.get("instance_type")
+        if instance_type in FLIGHT_INSTANCE_TYPES:
+            resource["instanceType"] = instance_type
+        elif instance_type:
+            warnings.append(
+                f"The live Flight runs on instance size {instance_type}, which Blueprints cannot declare. "
+                f"Set instanceType to one of {', '.join(FLIGHT_INSTANCE_TYPES)} before enabling deployment."
+            )
         warnings.append("manageSchedule: false preserves the live schedule, including paused state.")
     elif kind == "dive":
         if (

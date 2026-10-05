@@ -156,7 +156,17 @@ resources:
           scheduleCron: ""
 ```
 
-Required fields are `name`, `source`, and `requirements`. Optional fields include `id`, `owner`, `deploy`, `manageSchedule`, `scheduleCron`, `accessTokenName`, `maxRuntimeSec`, `runOnDeploy`, `waitForRun`, `secrets`, `config`, and `targets`. `maxRuntimeSec: 0` means no timeout. With `waitForRun: success`, deployment waits at least `maxRuntimeSec` plus two minutes for the run to finish.
+Required fields are `name`, `source`, and `requirements`. Optional fields include `id`, `owner`, `deploy`, `manageSchedule`, `scheduleCron`, `accessTokenName`, `maxRuntimeSec`, `instanceType`, `runOnDeploy`, `waitForRun`, `secrets`, `config`, and `targets`. `maxRuntimeSec: 0` means no timeout. With `waitForRun: success`, deployment waits at least `maxRuntimeSec` plus two minutes for the run to finish.
+
+`instanceType` sets the Flight's instance size: `F4` (0.5 vCPU, 4 GB), `F16` (2 vCPU, 16 GB), or `F32` (4 vCPU, 32 GB). Your plan decides which sizes are allowed:
+
+| Plan | Allowed | Default |
+| --- | --- | --- |
+| Business | `F4`, `F16`, `F32` | `F16` |
+| Lite, Free Trial | `F4`, `F16` | `F16` |
+| Free | `F4` | `F4` |
+
+Without `instanceType`, a new Flight gets the plan default and an existing Flight keeps its current size. Removing the field does not reset the size; set it to the size you want. MotherDuck rejects a size your plan does not allow when the Flight is created or updated. Sending a size needs DuckDB 1.5.6 or newer. The Blueprints action already uses it. Locally, `plan` and `deploy` stop before any write when the SQL backend is older; install `md-blueprints[deploy]` and set `MD_BLUEPRINTS_SQL_BACKEND=duckdb`, because the pinned MotherDuck CLI ships DuckDB 1.5.5.
 
 Flight source must exist and parse as Python. Cron values use five UTC fields. The default preview policy disables schedules. `waitForRun: success` applies when `runOnDeploy: true`.
 

@@ -51,7 +51,7 @@ Use `make install-deploy` to install the MotherDuck CLI version tested by Bluepr
 Declare resources in `blueprint.yml`:
 
 - `resources.shares` names produced data products and their preview cleanup behavior.
-- `resources.flights` deploys MotherDuck Flights from Python source and requirements files.
+- `resources.flights` deploys MotherDuck Flights from Python source and requirements files. `instanceType` (`F4`, `F16`, `F32`) needs DuckDB 1.5.6; omitting it keeps the live size, or the plan default for a new Flight.
 - `resources.dives` deploys Dives and required resources.
 - `resources.guides` validates Guide files and deploys them when `deploy: true`; organization access requires an admin deployment identity.
 - `resources.roles` reconciles production custom roles and memberships. Preview role deployment is always disabled.

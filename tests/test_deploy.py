@@ -427,6 +427,72 @@ def test_flight_deploy_passes_max_runtime_seconds(monkeypatch: pytest.MonkeyPatc
 
     update = next(call for call in calls if "MD_UPDATE_FLIGHT" in call)
     assert '"max_runtime_sec" => 900::UINTEGER' in update
+    assert "instance_type" not in update
+
+
+@pytest.mark.parametrize("action", ["create", "update"])
+def test_flight_deploy_passes_declared_instance_type(monkeypatch: pytest.MonkeyPatch, action: str) -> None:
+    deployer = Deployer(Project(FIXTURES / "complex"))
+    calls: list[str] = []
+    def fake_sql(statement: str) -> str:
+        calls.append(statement)
+        return ""
+    monkeypatch.setattr(deployer, "_sql", fake_sql)
+    monkeypatch.setattr(deployer, "_list_flight_ids", lambda name: ["flight-id"])
+
+    deployer._deploy_flight(
+        {
+            "name": "sized-flight",
+            "sourcePath": "src/flight.py",
+            "requirementsPath": "src/requirements.txt",
+            "scheduleCron": "",
+            "instanceType": "F32",
+        },
+        "prod",
+        PlanRecord("ops", "flight", "loader", "sized-flight", action, action == "update", "flight-id"),
+    )
+
+    statement = next(call for call in calls if f"MD_{action.upper()}_FLIGHT" in call)
+    assert """"instance_type" => 'F32'""" in statement
+
+
+def sized_flight_deployer(monkeypatch: pytest.MonkeyPatch, version: str) -> tuple[Deployer, list[str]]:
+    deployer = Deployer(Project(FIXTURES / "complex"))
+    queries: list[str] = []
+    def fake_sql(statement: str) -> str:
+        queries.append(statement)
+        return version
+    monkeypatch.setattr(deployer, "_sql", fake_sql)
+    monkeypatch.setattr("md_blueprints.deploy.sql_backend", lambda: "motherduck")
+    return deployer, queries
+
+
+def test_instance_type_preflight_rejects_old_duckdb_before_writes(monkeypatch: pytest.MonkeyPatch) -> None:
+    deployer, queries = sized_flight_deployer(monkeypatch, "v1.5.5")
+    rendered = [RenderedBlueprint("ops", "Ops", "", {}, {"loader": {"name": "sized", "instanceType": "F16"}}, {}, {})]
+
+    with pytest.raises(ValidationError, match=r"instanceType on ops.loader needs DuckDB 1.5.6 or newer, but the motherduck SQL backend runs v1.5.5"):
+        deployer._preflight_flight_instance_types(rendered)
+    assert queries == ["SELECT library_version FROM pragma_version()"]
+
+
+@pytest.mark.parametrize("version", ["v1.5.6", "v1.6.0", "v2.0.1"])
+def test_instance_type_preflight_accepts_current_duckdb(monkeypatch: pytest.MonkeyPatch, version: str) -> None:
+    deployer, _ = sized_flight_deployer(monkeypatch, version)
+    rendered = [RenderedBlueprint("ops", "Ops", "", {}, {"loader": {"name": "sized", "instanceType": "F16"}}, {}, {})]
+
+    deployer._preflight_flight_instance_types(rendered)
+
+
+def test_instance_type_preflight_skips_unsized_and_disabled_flights(monkeypatch: pytest.MonkeyPatch) -> None:
+    deployer, queries = sized_flight_deployer(monkeypatch, "v1.5.4")
+    rendered = [RenderedBlueprint("ops", "Ops", "", {}, {
+        "plain": {"name": "plain"},
+        "disabled": {"name": "disabled", "instanceType": "F32", "deploy": False},
+    }, {}, {})]
+
+    deployer._preflight_flight_instance_types(rendered)
+    assert queries == []
 
 
 def test_dive_deploy_reconciles_governance_status(monkeypatch: pytest.MonkeyPatch) -> None:

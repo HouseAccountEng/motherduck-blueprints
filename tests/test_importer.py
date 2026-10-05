@@ -279,6 +279,21 @@ def test_native_local_mount_export_is_replaced_without_changing_component() -> N
     assert '"path": "md:live"' in imported
 
 
+@pytest.mark.parametrize(("live", "declared", "warned"), [
+    ("F32", "F32", False),
+    ("F8", None, True),
+    (None, None, False),
+])
+def test_flight_import_keeps_a_declarable_instance_type(live: str | None, declared: str | None, warned: bool) -> None:
+    items = snapshots()
+    if live is not None:
+        items[0]["content"]["instance_type"] = live
+    _, files, report = convert(items[0], "prod")
+    flight = yaml.safe_load(files["blueprint.yml"])["resources"]["flights"]["imported"]
+    assert flight.get("instanceType") == declared
+    assert any("instance size" in warning for warning in report["warnings"]) is warned
+
+
 def test_explicit_null_collections_are_not_mistaken_for_missing_fields() -> None:
     items = snapshots()
     items[0]["content"].update(config=None, flight_secret_names=None, max_runtime_sec=None)

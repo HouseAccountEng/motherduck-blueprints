@@ -131,6 +131,11 @@
       "description": "one of DISCOVERABLE or HIDDEN (case-insensitive)",
       "pattern": "^(?:[Dd][Ii][Ss][Cc][Oo][Vv][Ee][Rr][Aa][Bb][Ll][Ee]|[Hh][Ii][Dd][Dd][Ee][Nn]|.*\\$\\{.*)$"
     },
+    "flightInstanceType": {
+      "type": "string",
+      "description": "one of F4, F16, or F32",
+      "pattern": "^(?:F4|F16|F32|.*\\$\\{.*)$"
+    },
     "flight": {
       "type": "object",
       "required": ["name", "source", "requirements"],
@@ -146,6 +151,7 @@
         "scheduleCron": { "type": "string" },
         "accessTokenName": { "type": "string" },
         "maxRuntimeSec": { "type": "integer", "minimum": 0 },
+        "instanceType": { "$ref": "#/$defs/flightInstanceType" },
         "runOnDeploy": { "type": "boolean" },
         "waitForRun": {
           "enum": ["success", false]
