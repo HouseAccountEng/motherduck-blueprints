@@ -335,7 +335,7 @@ grep -q "wikipedia-pageviews:feature/mock-test (Preview)" "${TMP_DIR}/preview.ou
 grep -q "wikipedia_pageviews_preview_feature_mock_test" "${TMP_DIR}/preview.out"
 grep -q "Wikipedia Pageviews:feature/mock-test (Preview)" "${TMP_DIR}/preview.out"
 head -n 1 "${TMP_DIR}/preview.out" | grep -q '^\*\*Selected:\*\* `wikipedia-pageviews` · \*\*Added by the dependency graph:\*\* `wikipedia-pageviews-ingest`$'
-grep -q "^<summary>Verified .* resource(s) across 2 blueprint(s)</summary>$" "${TMP_DIR}/preview.out"
+grep -q "^<summary>Verified [0-9]* resources across 2 blueprints</summary>$" "${TMP_DIR}/preview.out"
 
 echo "==> Mock updating unscheduled preview blueprint"
 md-blueprints deploy --target preview --branch feature/mock-test --blueprints wikipedia-pageviews > "${TMP_DIR}/preview-update.out" 2>&1

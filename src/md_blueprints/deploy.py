@@ -252,6 +252,10 @@ class PlanFormatter:
         return "\n".join(lines)
 
     @staticmethod
+    def _count(count: int, noun: str) -> str:
+        return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+    @staticmethod
     def _names(names: list[str]) -> str:
         return ", ".join(f"`{name}`" for name in names)
 
@@ -309,10 +313,11 @@ class Deployer:
         """Lead with what changed and the preview links; fold the full resource table away."""
         parts = [PlanFormatter.selection(requested, [blueprint.name for blueprint in rendered]), *sections]
         if verified:
-            blueprints = len({record.blueprint for record in verified})
+            resources = PlanFormatter._count(len(verified), "resource")
+            blueprints = PlanFormatter._count(len({record.blueprint for record in verified}), "blueprint")
             parts.append(
                 "<details>\n"
-                f"<summary>Verified {len(verified)} resource(s) across {blueprints} blueprint(s)</summary>\n\n"
+                f"<summary>Verified {resources} across {blueprints}</summary>\n\n"
                 f"{PlanFormatter.table(verified)}\n\n"
                 "</details>"
             )

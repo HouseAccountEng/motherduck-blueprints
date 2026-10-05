@@ -154,7 +154,7 @@ def test_preview_report_leads_with_selection_and_links_and_folds_resources(
     assert output.startswith("**Selected:** `listings` · **Added by the dependency graph:** `ingest`\n")
     assert output.index("#### Ingest") < output.index("#### Listings") < output.index("<details>")
     folded = output[output.index("<details>"):]
-    assert "<summary>Verified 2 resource(s) across 2 blueprint(s)</summary>" in folded
+    assert "<summary>Verified 2 resources across 2 blueprints</summary>" in folded
     assert "| ingest | flight | loader |" in folded and folded.rstrip().endswith("</details>")
     assert "Deployment Verification" not in output
     # The run summary keeps the unfolded table.
