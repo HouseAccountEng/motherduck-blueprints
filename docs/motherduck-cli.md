@@ -58,6 +58,8 @@ Checked against the installed `v1.5.5-2026-09-35` help on 2026-09-09. Run `mothe
 | Flight secrets | `flight create-secret`, `flight list-secrets`, `flight delete-secret` | Manage runtime secrets. Listing exposes names and structure, not values. |
 | Guides | `guide init`, `guide list`, `guide list-versions`, `guide pull`, `guide push`, `guide delete` | Work with Markdown guidance, access settings, and object references. |
 
+`dive watch` in CLI `v1.5.5` builds, including the version Blueprints installs, shows a blank preview. Production Dives stopped sending cross-origin isolation headers, and the older dev server still requires them. Use `make preview NAME=<blueprint-name>` until a newer CLI is published; the Blueprints preview sends no isolation headers, matching production.
+
 Read `dive guide` or `flight guide` before authoring source. `init` writes local files. `push`, run controls, deletes, and secret changes mutate MotherDuck. After adopting a package, make managed changes through its repository workflow so its identity checks and target policies apply.
 
 ## CI and compatibility
@@ -68,6 +70,6 @@ Environment tokens stay in the process environment. CI uses an isolated `MOTHERD
 
 Local Blueprints commands automatically prefer the native CLI when available. The existing Python runtime remains a compatibility fallback when it is absent. Set `MD_BLUEPRINTS_SQL_BACKEND=duckdb` to select that backend explicitly after installing `md-blueprints[deploy]`. CI import and `make export` explicitly select the native CLI. Other CI live operations select the Python backend.
 
-The native version is managed inside the Blueprints release. `make install-deploy` installs that tested version. `motherduck upgrade` can update your local installation independently.
+The native CLI embeds DuckDB 1.5.5, so imports through it do not read a Flight's instance size, and deployments that set `instanceType` need the Python backend. The native version is managed inside the Blueprints release. `make install-deploy` installs that tested version. `motherduck upgrade` can update your local installation independently.
 
 See the official [CLI overview](https://motherduck.com/docs/getting-started/interfaces/motherduck-cli/), [installation guide](https://motherduck.com/docs/getting-started/interfaces/motherduck-cli/install/), and [command reference](https://motherduck.com/docs/sql-reference/motherduck-cli/).

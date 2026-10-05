@@ -513,6 +513,8 @@ resources:
         ('          maxRuntimeSec: "abc"', r"maxRuntimeSec must be integer"),
         ("          maxRuntimeSec: -5", r"maxRuntimeSec must be (integer|>= 0)"),
         ("          id: not-a-uuid", r"id must be a UUID"),
+        ("          instanceType: F8", r"instanceType must be one of F4, F16, or F32"),
+        ("          instanceType: f16", r"instanceType must be one of F4, F16, or F32"),
     ],
 )
 def test_target_overrides_are_validated_against_the_resource_schema(
@@ -527,6 +529,21 @@ def test_target_overrides_are_validated_against_the_resource_schema(
     assert str(path) in message
     assert "resources.flights.loader" in message
     assert "target 'prod'" in message
+
+
+def test_templated_instance_type_override_is_validated_after_rendering(tmp_path: Path) -> None:
+    path = write_override_project(tmp_path, "          instanceType: ${var.size}")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace('  runtime: "900"\n', '  runtime: "900"\n  size: F32\n'),
+        encoding="utf-8",
+    )
+    project = Project(tmp_path)
+    project.validate(targets=["prod"])
+    assert project.render_all("prod")[0].flights["loader"]["instanceType"] == "F32"
+
+    path.write_text(path.read_text(encoding="utf-8").replace("  size: F32\n", "  size: F64\n"), encoding="utf-8")
+    with pytest.raises(ValidationError, match=r"instanceType must be one of F4, F16, or F32"):
+        Project(tmp_path).validate(targets=["prod"])
 
 
 def test_templated_runtime_override_still_renders_as_integer(tmp_path: Path) -> None:

@@ -14,10 +14,7 @@ export default defineConfig({
     },
   },
   server: {
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "credentialless",
-    },
+    // Production Dives are not cross-origin isolated, so the preview sends no COOP/COEP headers.
     fs: {
       allow: [path.resolve(__dirname, "..")],
     },

@@ -24,6 +24,9 @@ from .project import (
 from .schema import ValidationError
 from .motherduck_cli import query_rows as cli_query_rows, sql_backend
 
+# MD_CREATE_FLIGHT and MD_UPDATE_FLIGHT accept instance_type from this client release.
+FLIGHT_INSTANCE_TYPE_MIN_DUCKDB = (1, 5, 6)
+
 DuckDBConfigValue = str | bool | int | float | list[str]
 
 
@@ -280,6 +283,7 @@ class Deployer:
         rendered = self._validate_and_render(target, branch, names)
         self._prepare_live_command(target, "plan")
         self._preflight_rbac(rendered)
+        self._preflight_flight_instance_types(rendered)
         return self._build_deploy_plan(rendered)
 
     def verify(self, *, target: str, branch: str | None, names: list[str] | None) -> list[PlanRecord]:
@@ -360,6 +364,7 @@ class Deployer:
         rendered = self._validate_and_render(target, branch, names)
         self._prepare_live_command(target, "deploy")
         self._preflight_rbac(rendered)
+        self._preflight_flight_instance_types(rendered)
         records = self._build_deploy_plan(rendered)
         self.ensure_plan_succeeds(records)
         plan_index = self._index_by_resource(records)
@@ -1321,6 +1326,9 @@ class Deployer:
             common_args.insert(3, f'"access_token_name" => {sql_string(access_token_name)}')
         if "maxRuntimeSec" in flight:
             common_args.insert(3, f'"max_runtime_sec" => {int(str(flight["maxRuntimeSec"]))}::UINTEGER')
+        # Omitted means the plan default on create and the current size on update.
+        if instance_type := str(flight.get("instanceType", "")):
+            common_args.insert(3, f'"instance_type" => {sql_string(instance_type)}')
         common_args_sql = ", ".join(common_args)
 
         if plan.action == "create":
@@ -1564,6 +1572,27 @@ class Deployer:
                 url = str(resource["url"])
             expressions.append(f"{{'url': {sql_string(url)}, 'alias': {sql_string(resource['alias'])}}}")
         return f"[{', '.join(expressions)}]"
+
+    def _preflight_flight_instance_types(self, rendered: list[RenderedBlueprint]) -> None:
+        """Fail before any write when the SQL backend cannot send a Flight instance size."""
+        sized = [
+            f"{blueprint.name}.{key}"
+            for blueprint in rendered
+            for key, flight in blueprint.flights.items()
+            if flight.get("instanceType") and flight.get("deploy") is not False
+        ]
+        if not sized:
+            return
+        version = self._sql("SELECT library_version FROM pragma_version()")
+        match = re.match(r"v?(\d+)\.(\d+)\.(\d+)", version)
+        if match and tuple(int(part) for part in match.groups()) >= FLIGHT_INSTANCE_TYPE_MIN_DUCKDB:
+            return
+        minimum = ".".join(str(part) for part in FLIGHT_INSTANCE_TYPE_MIN_DUCKDB)
+        raise ValidationError(
+            f"instanceType on {', '.join(sized)} needs DuckDB {minimum} or newer, but the "
+            f"{sql_backend()} SQL backend runs {version or 'an unknown version'}. Install md-blueprints[deploy] "
+            "and set MD_BLUEPRINTS_SQL_BACKEND=duckdb, or remove instanceType to keep the current size."
+        )
 
     def _preflight_rbac(self, rendered: list[RenderedBlueprint]) -> None:
         admin_reasons: list[str] = []
