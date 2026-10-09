@@ -28,6 +28,12 @@ on:
         description: Python version used by the Blueprints action.
         type: string
         default: "3.11"
+    secrets:
+      MOTHERDUCK_TOKEN:
+        description: >-
+          Pass the target's MOTHERDUCK_TOKEN by name. GitHub resolves an environment secret to an
+          empty string in a reusable workflow unless the caller passes it.
+        required: false
 
 jobs:
   compute_changes:
